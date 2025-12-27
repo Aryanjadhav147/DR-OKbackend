@@ -1,35 +1,44 @@
+// server/config/firebase.js
 const admin = require("firebase-admin");
 const dotenv = require("dotenv");
 
-// Load environment variables
 dotenv.config();
 
-let serviceAccount;
-
-// LOGIC: Check if we are running on Vercel (Env Var) or Local (File)
-try {
-  if (process.env.GOOGLE_CREDENTIALS) {
-    // SCENARIO 1: We are on Vercel
-    serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-    console.log("Loaded Firebase credentials from Environment Variable");
-  } else {
-    // SCENARIO 2: We are on Localhost
-    // FIX: Changed path from './' to '../' because we are now inside the 'config' folder
-    serviceAccount = require("../serviceAccountKey.json"); 
-    console.log("Loaded Firebase credentials from local file");
-  }
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-
-  console.log("Firebase Admin Initialized Successfully");
-
-} catch (error) {
-  console.error("Firebase Initialization Error:", error.message);
+// --- 1. DOCTOR DB ---
+let serviceAccountDoctor;
+if (process.env.DOCTOR_CREDENTIALS) {
+  // Read from Vercel (String)
+  serviceAccountDoctor = JSON.parse(process.env.DOCTOR_CREDENTIALS);
+} else {
+  // Read from Laptop (File)
+  serviceAccountDoctor = require("../serviceAccountKey.json");
 }
 
-const db = admin.firestore();
+const doctorApp = admin.initializeApp({
+  credential: admin.credential.cert(serviceAccountDoctor)
+}, "doctorApp");
 
-// Export 'admin' (for auth) and 'db' (for database)
-module.exports = { admin, db };
+const db = doctorApp.firestore();
+
+// --- 2. INVENTORY DB ---
+let serviceAccountInventory;
+let inventoryDb = null;
+
+if (process.env.INVENTORY_CREDENTIALS) {
+  // Read from Vercel (String)
+  serviceAccountInventory = JSON.parse(process.env.INVENTORY_CREDENTIALS);
+} else {
+  // Read from Laptop (File)
+  try {
+    serviceAccountInventory = require("../inventoryKey.json");
+  } catch (e) { console.log("No local inventory key found"); }
+}
+
+if (serviceAccountInventory) {
+    const inventoryApp = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccountInventory)
+    }, "inventoryApp");
+    inventoryDb = inventoryApp.firestore();
+}
+
+module.exports = { admin, db, inventoryDb };
