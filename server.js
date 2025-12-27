@@ -6,7 +6,8 @@ const app = express();
 
 // --- 1. SECURE CORS CONFIGURATION ---
 const allowedOrigins = [
-  "http://localhost:5174",       // Vite Localhost (Alternate)
+  "http://localhost:5174",
+  "http://localhost:5173",       // Vite Localhost (Alternate)
   "http://localhost:5000",       // Backend Localhost
   "https://dr-ok.netlify.app"    // YOUR LIVE NETLIFY FRONTEND
 ];
