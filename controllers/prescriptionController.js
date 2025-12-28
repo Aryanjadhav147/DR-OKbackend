@@ -1,14 +1,12 @@
-// Import both DBs
-const { db, inventoryDb, admin } = require('../config/firebase'); 
+const { db, inventoryDb, admin } = require('../config/firebase');
 
-// --- API 1: SEARCH MEDICINES (Look inside Inventory DB) ---
+// --- API 1: SEARCH MEDICINES (Unchanged) ---
 exports.searchMedicines = async (req, res) => {
   try {
     const { query } = req.query; 
     if (!query) return res.json([]);
     if (!inventoryDb) return res.status(500).json({ error: "Inventory DB not connected" });
 
-    // Use 'inventoryDb' to search
     const snapshot = await inventoryDb.collection('medicines') 
       .where('brand_name', '>=', query)
       .where('brand_name', '<=', query + '\uf8ff')
@@ -31,24 +29,35 @@ exports.searchMedicines = async (req, res) => {
   }
 };
 
-// --- API 2: CREATE PRESCRIPTION (Hybrid Logic) ---
+// --- API 2: CREATE PRESCRIPTION (UPDATED: Saves Name & Phone) ---
 exports.createPrescription = async (req, res) => {
   try {
-    const { doctorId, patientId, medicines, diagnosis, date } = req.body;
+    const { 
+      doctorId, 
+      patientName,  // <--- Manual Input
+      phoneNumber,  // <--- Manual Input (The Key)
+      medicines, 
+      diagnosis, 
+      date 
+    } = req.body;
 
-    // 1. Save Prescription to DOCTOR DB ('db')
+    // Validate
+    if (!patientName || !phoneNumber) {
+      return res.status(400).json({ error: "Patient Name and Phone Number are required." });
+    }
+
+    // 1. Save to Doctor DB
     await db.collection('prescriptions').add({
       doctorId,
-      patientId,
+      patientName, 
+      phoneNumber, 
       diagnosis,
       medicines, 
       date: date || new Date().toISOString().split('T')[0],
       createdAt: new Date()
     });
 
-    // 2. Deduct Stock from INVENTORY DB ('inventoryDb')
-    // Note: We cannot use a Batch across two different databases. 
-    // We must update them one by one.
+    // 2. Deduct Stock from Inventory DB
     if (inventoryDb) {
         const updatePromises = medicines.map(med => {
             if (med.inventoryId) {
@@ -61,10 +70,34 @@ exports.createPrescription = async (req, res) => {
         await Promise.all(updatePromises);
     }
 
-    res.status(200).json({ message: "Prescription saved and Stock updated!" });
+    res.status(200).json({ message: `Prescription sent to ${patientName} (${phoneNumber})` });
 
   } catch (error) {
-    console.error(error);
+    console.error("Create Prescription Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// --- API 3: FETCH MY PRESCRIPTIONS (For Patient Dashboard) ---
+exports.getMyPrescriptions = async (req, res) => {
+  try {
+    const { phoneNumber } = req.query; // Patient sends their phone number
+
+    if (!phoneNumber) return res.json([]);
+
+    // Fetch ALL prescriptions linked to this phone number
+    const snapshot = await db.collection('prescriptions')
+      .where('phoneNumber', '==', phoneNumber)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const prescriptions = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json(prescriptions);
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
