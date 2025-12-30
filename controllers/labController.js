@@ -82,3 +82,43 @@ exports.getPatientBookings = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch bookings" });
   }
 };
+//  4. GET LAB'S OWN BOOKINGS (For Lab Dashboard) ---
+exports.getLabBookings = async (req, res) => {
+  try {
+    const { labId } = req.params;
+    const snapshot = await db.collection('lab_bookings')
+      .where('labId', '==', labId)
+      // .orderBy('date', 'desc') // Add index in Firebase if this errors
+      .get();
+    
+    const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(bookings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// --- 5. UPDATE BOOKING (Upload Report) ---
+exports.updateBookingStatus = async (req, res) => {
+  try {
+    const { bookingId, status, reportUrl } = req.body;
+    await db.collection('lab_bookings').doc(bookingId).update({
+      status,
+      reportUrl: reportUrl || null
+    });
+    res.json({ message: "Booking updated successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// --- 6. MANAGE SERVICES (Add/Remove Tests) ---
+exports.updateLabServices = async (req, res) => {
+  try {
+    const { labId, services } = req.body; // services is an array of objects
+    await db.collection('labs').doc(labId).update({ services });
+    res.json({ message: "Services updated successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

@@ -10,5 +10,9 @@ router.post('/book-test', labController.bookLabTest);
 
 // Route to get a specific patient's history
 router.get('/my-bookings/:patientId', labController.getPatientBookings);
+// NEW ROUTES FOR LAB DASHBOARD
+router.get('/lab-bookings/:labId', labController.getLabBookings);
+router.post('/update-booking', labController.updateBookingStatus);
+router.post('/update-services', labController.updateLabServices);
 
 module.exports = router;

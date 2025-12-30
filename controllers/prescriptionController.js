@@ -1,36 +1,67 @@
 const { db, inventoryDb, admin } = require('../config/firebase');
 
-// --- API 1: SEARCH MEDICINES (Unchanged) ---
+// --- API 1: SEARCH MEDICINES (Robust Case-Insensitive) ---
 exports.searchMedicines = async (req, res) => {
   try {
     const { query } = req.query; 
     if (!query) return res.json([]);
     if (!inventoryDb) return res.status(500).json({ error: "Inventory DB not connected" });
 
-    // 1. Fetch from Database
-    const snapshot = await inventoryDb.collection('medicines') 
-      .where('brand_name', '>=', query)
-      .where('brand_name', '<=', query + '\uf8ff')
-      .limit(10)
-      .get();
+    // 1. Prepare Variations
+    const termExact = query;                                      // e.g. "dolo"
+    const termTitle = query.charAt(0).toUpperCase() + query.slice(1).toLowerCase(); // e.g. "Dolo"
+    const termCaps = query.toUpperCase();                         // e.g. "DOLO"
 
-    // 2. Format Data (CRITICAL FIX HERE)
-    const medicines = snapshot.docs.map(doc => {
-        const data = doc.data();
+    console.log(`🔍 Searching for: "${termExact}", "${termTitle}", "${termCaps}"`);
+
+    // 2. Run 3 Parallel Queries
+    const [snapExact, snapTitle, snapCaps] = await Promise.all([
+        // Query 1: Exact Match
+        inventoryDb.collection('medicines')
+            .where('brand_name', '>=', termExact)
+            .where('brand_name', '<=', termExact + '\uf8ff')
+            .limit(5).get(),
+        // Query 2: Title Case (Most likely to succeed)
+        inventoryDb.collection('medicines')
+            .where('brand_name', '>=', termTitle)
+            .where('brand_name', '<=', termTitle + '\uf8ff')
+            .limit(5).get(),
+        // Query 3: All Caps
+        inventoryDb.collection('medicines')
+            .where('brand_name', '>=', termCaps)
+            .where('brand_name', '<=', termCaps + '\uf8ff')
+            .limit(5).get()
+    ]);
+
+    // 3. Merge Results & Remove Duplicates
+    const allDocs = new Map();
+
+    const processDoc = (doc) => {
+        if (!allDocs.has(doc.id)) {
+            allDocs.set(doc.id, doc.data());
+        }
+    };
+
+    snapExact.docs.forEach(processDoc);
+    snapTitle.docs.forEach(processDoc);
+    snapCaps.docs.forEach(processDoc);
+
+    // 4. Format Data for Frontend
+    const medicines = Array.from(allDocs.entries()).map(([id, data]) => {
         return {
-            id: doc.id,
-            // Spread all data so 'batches', 'pack_type', etc. are included automatically
-            ...data, 
-            // Keep these for backward compatibility if needed
+            id: id,
+            ...data, // Include batches, pack_type etc.
             name: data.brand_name, 
             composition: data.composition_details?.name || '', 
             stock: data.total_stock || data.stock || 0 
         };
     });
 
+    console.log(`✅ Found ${medicines.length} results.`);
     res.json(medicines);
+
   } catch (error) {
-    console.error("Search Error:", error);
+    console.error("❌ Search Error:", error);
     res.status(500).json({ error: error.message });
   }
 };
