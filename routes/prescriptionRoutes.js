@@ -10,5 +10,7 @@ router.post('/create-prescription', prescriptionController.createPrescription);
 
 // NEW: Get Prescriptions (For Patient)
 router.get('/my-prescriptions', prescriptionController.getMyPrescriptions);
+// We use :doctorId so the backend knows WHICH doctor is asking
+router.get('/doctor-history/:doctorId', prescriptionController.getDoctorPrescriptions);
 
 module.exports = router;

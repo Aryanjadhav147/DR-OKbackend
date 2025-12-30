@@ -7,77 +7,98 @@ exports.searchMedicines = async (req, res) => {
     if (!query) return res.json([]);
     if (!inventoryDb) return res.status(500).json({ error: "Inventory DB not connected" });
 
+    // 1. Fetch from Database
     const snapshot = await inventoryDb.collection('medicines') 
       .where('brand_name', '>=', query)
       .where('brand_name', '<=', query + '\uf8ff')
       .limit(10)
       .get();
 
+    // 2. Format Data (CRITICAL FIX HERE)
     const medicines = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
             id: doc.id,
+            // Spread all data so 'batches', 'pack_type', etc. are included automatically
+            ...data, 
+            // Keep these for backward compatibility if needed
             name: data.brand_name, 
             composition: data.composition_details?.name || '', 
-            stock: data.stock || 0 
+            stock: data.total_stock || data.stock || 0 
         };
     });
 
     res.json(medicines);
   } catch (error) {
+    console.error("Search Error:", error);
     res.status(500).json({ error: error.message });
   }
 };
-
 // --- API 2: CREATE PRESCRIPTION (UPDATED: Saves Name & Phone) ---
 exports.createPrescription = async (req, res) => {
   try {
-    const { 
-      doctorId, 
-      patientName,  // <--- Manual Input
-      phoneNumber,  // <--- Manual Input (The Key)
-      medicines, 
-      diagnosis, 
-      date 
-    } = req.body;
+    const { doctorId, patientName, phoneNumber, diagnosis, medicines } = req.body;
 
-    // Validate
-    if (!patientName || !phoneNumber) {
-      return res.status(400).json({ error: "Patient Name and Phone Number are required." });
-    }
-
-    // 1. Save to Doctor DB
-    await db.collection('prescriptions').add({
+    // 1. Create the Prescription Document (Same as before)
+    const prescriptionRef = db.collection('prescriptions').doc();
+    await prescriptionRef.set({
       doctorId,
-      patientName, 
-      phoneNumber, 
+      patientName,
+      phoneNumber,
       diagnosis,
-      medicines, 
-      date: date || new Date().toISOString().split('T')[0],
-      createdAt: new Date()
+      medicines,
+      createdAt: new Date().toISOString()
     });
 
-    // 2. Deduct Stock from Inventory DB
-    if (inventoryDb) {
-        const updatePromises = medicines.map(med => {
-            if (med.inventoryId) {
-                const medRef = inventoryDb.collection('medicines').doc(med.inventoryId);
-                return medRef.update({
-                    stock: admin.firestore.FieldValue.increment(-med.quantity)
-                });
+    // 2. DEDUCT INVENTORY (The Critical Fix)
+    for (const item of medicines) {
+      if (!item.inventoryId) continue; // Skip custom medicines
+
+      const medRef = inventoryDb.collection('medicines').doc(item.inventoryId);
+      const medSnap = await medRef.get();
+
+      if (medSnap.exists) {
+        const medData = medSnap.data();
+        let updateData = {};
+
+        // CASE A: It's a Batch Item
+        if (item.batchId && medData.batches) {
+          // Find the correct batch index
+          const updatedBatches = medData.batches.map(batch => {
+            if (batch.batch_id === item.batchId) {
+              // Deduct from this specific batch
+              const newQty = (batch.stock_quantity || 0) - (item.quantity || 1);
+              return { ...batch, stock_quantity: newQty < 0 ? 0 : newQty };
             }
-        });
-        await Promise.all(updatePromises);
+            return batch;
+          });
+
+          updateData.batches = updatedBatches;
+          
+          // Also update the Helper Field 'total_stock' if it exists
+          if (medData.total_stock !== undefined) {
+             updateData.total_stock = medData.total_stock - (item.quantity || 1);
+          }
+        } 
+        // CASE B: It's an Old/Legacy Item (No Batches)
+        else {
+           // Fallback to old logic
+           const currentStock = medData.stock || 0;
+           updateData.stock = currentStock - (item.quantity || 1);
+        }
+
+        // Commit the update to DB
+        await medRef.update(updateData);
+      }
     }
 
-    res.status(200).json({ message: `Prescription sent to ${patientName} (${phoneNumber})` });
+    res.status(200).json({ message: 'Prescription Saved & Inventory Updated!' });
 
   } catch (error) {
-    console.error("Create Prescription Error:", error);
+    console.error("Prescription Error:", error);
     res.status(500).json({ error: error.message });
   }
 };
-
 // --- API 3: FETCH MY PRESCRIPTIONS (For Patient Dashboard) ---
 exports.getMyPrescriptions = async (req, res) => {
   try {
@@ -99,5 +120,35 @@ exports.getMyPrescriptions = async (req, res) => {
     res.json(prescriptions);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+exports.getDoctorPrescriptions = async (req, res) => {
+  try {
+    const { doctorId } = req.params; // We get the Doctor's ID from the URL
+
+    if (!doctorId) {
+        return res.status(400).json({ error: "Doctor ID is required" });
+    }
+
+    // QUERY: "Find all prescriptions where doctorId matches AND sort by newest"
+    const snapshot = await db.collection('prescriptions')
+      .where('doctorId', '==', doctorId)
+      .orderBy('createdAt', 'desc') // Newest first
+      .get();
+
+    // Convert database documents into a clean list
+    const history = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json(history);
+
+  } catch (error) {
+    console.error("Error fetching doctor history:", error);
+    res.status(500).json({ 
+        // Send the error message so we can see if it's an Index Error
+        error: error.message 
+    });
   }
 };
