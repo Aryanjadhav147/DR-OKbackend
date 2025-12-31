@@ -58,7 +58,7 @@ exports.registerLab = async (req, res) => {
 exports.getRole = async (req, res) => {
   try {
     const uid = req.params.uid;
-    console.log("🔍 Checking Role for UID:", uid);
+    // console.log("🔍 Checking Role for UID:", uid);
 
     // A. Check Doctors
     const doctorDoc = await db.collection('doctors').doc(uid).get();
@@ -110,7 +110,7 @@ exports.verifyLab = async (req, res) => {
   try {
     const { labId } = req.body;
     await db.collection('labs').doc(labId).update({
-      isVerified: true
+      isVerified: false
     });
     res.status(200).json({ message: "Lab Verified Successfully" });
   } catch (error) {

@@ -67,7 +67,7 @@ exports.getPatientBookings = async (req, res) => {
 
     const snapshot = await db.collection('lab_bookings')
       .where('patientId', '==', patientId)
-      // .orderBy('createdAt', 'desc') // Requires an index, uncomment after creating it
+       .orderBy('createdAt', 'desc') 
       .get();
 
     const bookings = snapshot.docs.map(doc => ({

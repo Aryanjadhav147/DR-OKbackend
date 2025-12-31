@@ -12,7 +12,7 @@ exports.searchMedicines = async (req, res) => {
     const termTitle = query.charAt(0).toUpperCase() + query.slice(1).toLowerCase(); // e.g. "Dolo"
     const termCaps = query.toUpperCase();                         // e.g. "DOLO"
 
-    console.log(`🔍 Searching for: "${termExact}", "${termTitle}", "${termCaps}"`);
+    // console.log(`🔍 Searching for: "${termExact}", "${termTitle}", "${termCaps}"`);
 
     // 2. Run 3 Parallel Queries
     const [snapExact, snapTitle, snapCaps] = await Promise.all([
@@ -57,7 +57,7 @@ exports.searchMedicines = async (req, res) => {
         };
     });
 
-    console.log(`✅ Found ${medicines.length} results.`);
+    // console.log(`✅ Found ${medicines.length} results.`);
     res.json(medicines);
 
   } catch (error) {
@@ -68,22 +68,33 @@ exports.searchMedicines = async (req, res) => {
 // --- API 2: CREATE PRESCRIPTION (UPDATED: Saves Name & Phone) ---
 exports.createPrescription = async (req, res) => {
   try {
-    const { doctorId, patientName, phoneNumber, diagnosis, medicines } = req.body;
+    // 1. EXTRACT DATA (Added doctorName & attachmentUrl)
+    const { doctorId, doctorName, patientName, phoneNumber, diagnosis, medicines, attachmentUrl } = req.body;
 
-    // 1. Create the Prescription Document (Same as before)
+    // 2. CREATE PRESCRIPTION DOCUMENT
     const prescriptionRef = db.collection('prescriptions').doc();
+    
+    // --- DATE FIX START ---
+    // Create a clean date string (e.g., "2025-10-25") for easy display
+    const today = new Date().toISOString().split('T')[0]; 
+    // --- DATE FIX END ---
+
     await prescriptionRef.set({
       doctorId,
+      doctorName: doctorName || "Unknown Doctor", // Save the name!
       patientName,
       phoneNumber,
       diagnosis,
       medicines,
-      createdAt: new Date().toISOString()
+      attachmentUrl: attachmentUrl || null,
+      
+      createdAt: new Date().toISOString(), // Exact timestamp for sorting
+      date: today // <--- THIS SAVES THE CLEAN DATE
     });
 
-    // 2. DEDUCT INVENTORY (The Critical Fix)
+    // 3. DEDUCT INVENTORY (Unchanged Logic)
     for (const item of medicines) {
-      if (!item.inventoryId) continue; // Skip custom medicines
+      if (!item.inventoryId) continue; 
 
       const medRef = inventoryDb.collection('medicines').doc(item.inventoryId);
       const medSnap = await medRef.get();
@@ -92,33 +103,22 @@ exports.createPrescription = async (req, res) => {
         const medData = medSnap.data();
         let updateData = {};
 
-        // CASE A: It's a Batch Item
         if (item.batchId && medData.batches) {
-          // Find the correct batch index
           const updatedBatches = medData.batches.map(batch => {
             if (batch.batch_id === item.batchId) {
-              // Deduct from this specific batch
               const newQty = (batch.stock_quantity || 0) - (item.quantity || 1);
               return { ...batch, stock_quantity: newQty < 0 ? 0 : newQty };
             }
             return batch;
           });
-
           updateData.batches = updatedBatches;
-          
-          // Also update the Helper Field 'total_stock' if it exists
           if (medData.total_stock !== undefined) {
              updateData.total_stock = medData.total_stock - (item.quantity || 1);
           }
-        } 
-        // CASE B: It's an Old/Legacy Item (No Batches)
-        else {
-           // Fallback to old logic
+        } else {
            const currentStock = medData.stock || 0;
            updateData.stock = currentStock - (item.quantity || 1);
         }
-
-        // Commit the update to DB
         await medRef.update(updateData);
       }
     }
