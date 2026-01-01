@@ -9,7 +9,8 @@ const allowedOrigins = [
   "http://localhost:5174",
   "http://localhost:5173",       // Vite Localhost (Alternate)
   "http://localhost:5000",       // Backend Localhost
-  "https://dr-ok.netlify.app"    // YOUR LIVE NETLIFY FRONTEND
+  "https://dr-ok.netlify.app", 
+  "https://dr-o-kfrontend.vercel.app"   // YOUR LIVE NETLIFY FRONTEND
 ];
 
 app.use(cors({
