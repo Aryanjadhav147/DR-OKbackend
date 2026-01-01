@@ -34,6 +34,17 @@ exports.registerLab = async (req, res) => {
   try {
     const { uid, email, name, phone, address, location } = req.body;
     
+    // Define the default schedule (Standard Business Hours)
+    const defaultSchedule = {
+      monday:    { isOpen: true, open: "09:00", close: "21:00" },
+      tuesday:   { isOpen: true, open: "09:00", close: "21:00" },
+      wednesday: { isOpen: true, open: "09:00", close: "21:00" },
+      thursday:  { isOpen: true, open: "09:00", close: "21:00" },
+      friday:    { isOpen: true, open: "09:00", close: "21:00" },
+      saturday:  { isOpen: true, open: "09:00", close: "21:00" },
+      sunday:    { isOpen: false, open: "10:00", close: "14:00" } // Closed by default
+    };
+
     await db.collection('labs').doc(uid).set({
       uid, 
       email, 
@@ -42,8 +53,15 @@ exports.registerLab = async (req, res) => {
       address, 
       location, 
       role: 'lab',
-      isVerified: false, // Default false until Agent approves
-      timings: "09:00 AM - 09:00 PM",
+      isVerified: false,
+      
+      // --- THE CHANGE ---
+      // 1. Keep 'timings' string for simple UI display (e.g. Search Cards)
+      timings: "09:00 AM - 09:00 PM", 
+      
+      // 2. Add 'schedule' object for the advanced logic
+      schedule: defaultSchedule, 
+      
       services: [],
       createdAt: new Date()
     });
@@ -53,7 +71,6 @@ exports.registerLab = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-
 // --- 4. GET USER ROLE (Fixed) ---
 exports.getRole = async (req, res) => {
   try {

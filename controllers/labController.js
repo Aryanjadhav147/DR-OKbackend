@@ -122,3 +122,23 @@ exports.updateLabServices = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+// --- 7. UPDATE LAB SETTINGS (Schedule & Info) ---
+exports.updateLabSettings = async (req, res) => {
+  try {
+    const { labId, schedule, holidayDate } = req.body;
+    
+    // We update whatever is sent (schedule or holidays)
+    const updateData = {};
+    if (schedule) updateData.schedule = schedule;
+    if (holidayDate) {
+        // This is a simple logic to ADD a date to a list of holidays
+        // For now, let's just save the schedule as that's our focus
+        // We can handle holidays in a future update
+    }
+
+    await db.collection('labs').doc(labId).update(updateData);
+    res.json({ message: "Lab settings updated successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

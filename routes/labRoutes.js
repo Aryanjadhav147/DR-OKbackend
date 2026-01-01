@@ -14,5 +14,6 @@ router.get('/my-bookings/:patientId', labController.getPatientBookings);
 router.get('/lab-bookings/:labId', labController.getLabBookings);
 router.post('/update-booking', labController.updateBookingStatus);
 router.post('/update-services', labController.updateLabServices);
+router.post('/update-settings', labController.updateLabSettings);
 
 module.exports = router;
