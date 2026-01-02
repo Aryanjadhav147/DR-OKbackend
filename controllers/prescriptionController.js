@@ -68,31 +68,40 @@ exports.searchMedicines = async (req, res) => {
 // --- API 2: CREATE PRESCRIPTION (UPDATED: Saves Name & Phone) ---
 exports.createPrescription = async (req, res) => {
   try {
-    // 1. EXTRACT DATA (Added doctorName & attachmentUrl)
-    const { doctorId, doctorName, patientName, phoneNumber, diagnosis, medicines, attachmentUrl } = req.body;
+    // 1. EXTRACT DATA
+    const { 
+      doctorId, 
+      doctorName, 
+      patientName, 
+      phoneNumber, 
+      diagnosis, 
+      medicines, 
+      tests, 
+      attachmentUrl 
+    } = req.body;
 
     // 2. CREATE PRESCRIPTION DOCUMENT
     const prescriptionRef = db.collection('prescriptions').doc();
-    
-    // --- DATE FIX START ---
-    // Create a clean date string (e.g., "2025-10-25") for easy display
     const today = new Date().toISOString().split('T')[0]; 
-    // --- DATE FIX END ---
 
     await prescriptionRef.set({
       doctorId,
-      doctorName: doctorName || "Unknown Doctor", // Save the name!
+      // Fallback to "Unknown" only if strictly necessary, but prefer the real name
+      doctorName: doctorName || "Unknown Doctor", 
       patientName,
       phoneNumber,
       diagnosis,
       medicines,
-      attachmentUrl: attachmentUrl || null,
       
-      createdAt: new Date().toISOString(), // Exact timestamp for sorting
-      date: today // <--- THIS SAVES THE CLEAN DATE
+      // Save Tests (Default to empty array if none provided)
+      tests: tests || [], 
+      
+      attachmentUrl: attachmentUrl || null,
+      createdAt: new Date().toISOString(),
+      date: today
     });
 
-    // 3. DEDUCT INVENTORY (Unchanged Logic)
+    // 3. DEDUCT INVENTORY (Only for Medicines)
     for (const item of medicines) {
       if (!item.inventoryId) continue; 
 
@@ -123,7 +132,7 @@ exports.createPrescription = async (req, res) => {
       }
     }
 
-    res.status(200).json({ message: 'Prescription Saved & Inventory Updated!' });
+    res.status(200).json({ message: 'Prescription Saved Successfully!' });
 
   } catch (error) {
     console.error("Prescription Error:", error);
