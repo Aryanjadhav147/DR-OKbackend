@@ -21,29 +21,47 @@ exports.getAllLabs = async (req, res) => {
   }
 };
 
-// --- 2. BOOK A LAB TEST (Saves the booking) ---
+// --- 2. BOOK A LAB TEST (UPDATED for Home Collection) ---
 exports.bookLabTest = async (req, res) => {
   try {
-    const { patientId, patientName, labId, labName, testName, price, date, timeSlot } = req.body;
+    // 1. Extract all data including new fields
+    const { 
+      patientId, patientName, labId, labName, testName, price, date, timeSlot,
+      collectionType,    // <--- NEW
+      collectionAddress, // <--- NEW
+      status             // <--- NEW
+    } = req.body;
 
     if (!patientId || !labId || !date || !timeSlot) {
       return res.status(400).json({ error: "Missing required booking details" });
     }
 
+    // 2. Create the data object
     const bookingData = {
       patientId,
-      patientName, // Useful for the Lab Technician's Dashboard later
+      patientName,
       labId,
       labName,
       testName,
       price,
       date,
       timeSlot,
-      status: 'Upcoming', // Default status
+      
+      // --- NEW FIELDS LOGIC ---
+      collectionType: collectionType || 'lab', 
+      collectionAddress: collectionAddress || "Patient will visit Lab",
+      status: status || 'pending', // Default to 'pending' so Lab can confirm it
+      
+      reportUrl: null,
       createdAt: new Date().toISOString()
     };
 
+    // 3. Save to Firestore
+    // Using .add() automatically generates an ID
     const docRef = await db.collection('lab_bookings').add(bookingData);
+
+    // Optional: Update the document to include its own ID (makes fetching easier later)
+    await docRef.update({ id: docRef.id });
 
     res.status(201).json({ 
       message: "Lab test booked successfully!", 
@@ -67,7 +85,7 @@ exports.getPatientBookings = async (req, res) => {
 
     const snapshot = await db.collection('lab_bookings')
       .where('patientId', '==', patientId)
-       .orderBy('createdAt', 'desc') 
+      .orderBy('createdAt', 'desc') 
       .get();
 
     const bookings = snapshot.docs.map(doc => ({
@@ -82,7 +100,8 @@ exports.getPatientBookings = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch bookings" });
   }
 };
-//  4. GET LAB'S OWN BOOKINGS (For Lab Dashboard) ---
+
+// --- 4. GET LAB'S OWN BOOKINGS (For Lab Dashboard) ---
 exports.getLabBookings = async (req, res) => {
   try {
     const { labId } = req.params;
@@ -98,14 +117,17 @@ exports.getLabBookings = async (req, res) => {
   }
 };
 
-// --- 5. UPDATE BOOKING (Upload Report) ---
+// --- 5. UPDATE BOOKING (Upload Report / Confirm Booking) ---
 exports.updateBookingStatus = async (req, res) => {
   try {
     const { bookingId, status, reportUrl } = req.body;
-    await db.collection('lab_bookings').doc(bookingId).update({
-      status,
-      reportUrl: reportUrl || null
-    });
+    
+    // Create update object dynamically
+    const updateData = { status };
+    if (reportUrl) updateData.reportUrl = reportUrl;
+
+    await db.collection('lab_bookings').doc(bookingId).update(updateData);
+    
     res.json({ message: "Booking updated successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -122,22 +144,37 @@ exports.updateLabServices = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 // --- 7. UPDATE LAB SETTINGS (Schedule & Info) ---
 exports.updateLabSettings = async (req, res) => {
   try {
     const { labId, schedule, holidayDate } = req.body;
     
-    // We update whatever is sent (schedule or holidays)
     const updateData = {};
     if (schedule) updateData.schedule = schedule;
-    if (holidayDate) {
-        // This is a simple logic to ADD a date to a list of holidays
-        // For now, let's just save the schedule as that's our focus
-        // We can handle holidays in a future update
-    }
+    
+    // Future: Handle holiday logic here if needed
 
     await db.collection('labs').doc(labId).update(updateData);
     res.json({ message: "Lab settings updated successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+// --- 8. UPDATE LAB PROFILE (Photo, Name, Address) ---
+exports.updateLabProfile = async (req, res) => {
+  try {
+    const { labId, name, phone, address, photoUrl } = req.body;
+    
+    // Construct update object dynamically
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (phone) updateData.phone = phone;
+    if (address) updateData.address = address;
+    if (photoUrl) updateData.photoUrl = photoUrl; // Only save if a new photo exists
+
+    await db.collection('labs').doc(labId).update(updateData);
+    res.json({ message: "Profile updated successfully!" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
