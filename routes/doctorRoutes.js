@@ -10,5 +10,7 @@ router.get('/doctor-history/:uid', doctorController.getDoctorHistory);
 
 // 3. Update Profile
 router.put('/update-profile', doctorController.updateDoctorProfile);
+// 1. Find Doctors
+router.get('/find-doctors', doctorController.getAllDoctors);
 
 module.exports = router;

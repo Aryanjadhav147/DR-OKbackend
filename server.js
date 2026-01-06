@@ -43,7 +43,7 @@ const patientRoutes = require('./routes/patientRoutes');
 // Note: We add '/api' here so we don't need to write it in every route file
 app.use('/api', authRoutes);
 app.use('/api', scheduleRoutes);
-app.use('/api/doctors', doctorRoutes);
+app.use('/api', doctorRoutes);
 // This tells the server: "If any link starts with /api, check the prescription routes too"
 app.use('/api', prescriptionRoutes);
 app.use('/api/labs', labRoutes);
