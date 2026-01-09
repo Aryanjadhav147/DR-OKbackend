@@ -1,45 +1,53 @@
-const { db, inventoryDb, admin } = require('../config/firebase');
+const { db, inventoryDb, admin } = require("../config/firebase");
 
 // --- API 1: SEARCH MEDICINES (Robust Case-Insensitive) ---
 exports.searchMedicines = async (req, res) => {
   try {
-    const { query } = req.query; 
+    const { query } = req.query;
     if (!query) return res.json([]);
-    if (!inventoryDb) return res.status(500).json({ error: "Inventory DB not connected" });
+    if (!inventoryDb)
+      return res.status(500).json({ error: "Inventory DB not connected" });
 
     // 1. Prepare Variations
-    const termExact = query;                                      // e.g. "dolo"
-    const termTitle = query.charAt(0).toUpperCase() + query.slice(1).toLowerCase(); // e.g. "Dolo"
-    const termCaps = query.toUpperCase();                         // e.g. "DOLO"
+    const termExact = query; // e.g. "dolo"
+    const termTitle =
+      query.charAt(0).toUpperCase() + query.slice(1).toLowerCase(); // e.g. "Dolo"
+    const termCaps = query.toUpperCase(); // e.g. "DOLO"
 
     // console.log(`🔍 Searching for: "${termExact}", "${termTitle}", "${termCaps}"`);
 
     // 2. Run 3 Parallel Queries
     const [snapExact, snapTitle, snapCaps] = await Promise.all([
-        // Query 1: Exact Match
-        inventoryDb.collection('medicines')
-            .where('brand_name', '>=', termExact)
-            .where('brand_name', '<=', termExact + '\uf8ff')
-            .limit(5).get(),
-        // Query 2: Title Case (Most likely to succeed)
-        inventoryDb.collection('medicines')
-            .where('brand_name', '>=', termTitle)
-            .where('brand_name', '<=', termTitle + '\uf8ff')
-            .limit(5).get(),
-        // Query 3: All Caps
-        inventoryDb.collection('medicines')
-            .where('brand_name', '>=', termCaps)
-            .where('brand_name', '<=', termCaps + '\uf8ff')
-            .limit(5).get()
+      // Query 1: Exact Match
+      inventoryDb
+        .collection("medicines")
+        .where("brand_name", ">=", termExact)
+        .where("brand_name", "<=", termExact + "\uf8ff")
+        .limit(5)
+        .get(),
+      // Query 2: Title Case (Most likely to succeed)
+      inventoryDb
+        .collection("medicines")
+        .where("brand_name", ">=", termTitle)
+        .where("brand_name", "<=", termTitle + "\uf8ff")
+        .limit(5)
+        .get(),
+      // Query 3: All Caps
+      inventoryDb
+        .collection("medicines")
+        .where("brand_name", ">=", termCaps)
+        .where("brand_name", "<=", termCaps + "\uf8ff")
+        .limit(5)
+        .get(),
     ]);
 
     // 3. Merge Results & Remove Duplicates
     const allDocs = new Map();
 
     const processDoc = (doc) => {
-        if (!allDocs.has(doc.id)) {
-            allDocs.set(doc.id, doc.data());
-        }
+      if (!allDocs.has(doc.id)) {
+        allDocs.set(doc.id, doc.data());
+      }
     };
 
     snapExact.docs.forEach(processDoc);
@@ -48,18 +56,17 @@ exports.searchMedicines = async (req, res) => {
 
     // 4. Format Data for Frontend
     const medicines = Array.from(allDocs.entries()).map(([id, data]) => {
-        return {
-            id: id,
-            ...data, // Include batches, pack_type etc.
-            name: data.brand_name, 
-            composition: data.composition_details?.name || '', 
-            stock: data.total_stock || data.stock || 0 
-        };
+      return {
+        id: id,
+        ...data, // Include batches, pack_type etc.
+        name: data.brand_name,
+        composition: data.composition_details?.name || "",
+        stock: data.total_stock || data.stock || 0,
+      };
     });
 
     // console.log(`✅ Found ${medicines.length} results.`);
     res.json(medicines);
-
   } catch (error) {
     console.error("❌ Search Error:", error);
     res.status(500).json({ error: error.message });
@@ -69,43 +76,58 @@ exports.searchMedicines = async (req, res) => {
 exports.createPrescription = async (req, res) => {
   try {
     // 1. EXTRACT DATA
-    const { 
-      doctorId, 
-      doctorName, 
-      patientName, 
-      phoneNumber, 
-      diagnosis, 
-      medicines, 
-      tests, 
-      attachmentUrl 
+    const {
+      doctorId,
+      doctorName,
+      patientName,
+      phoneNumber,
+      officialName,
+      diagnosis,
+      medicines,
+
+      tests,
+      attachmentUrl,
+      age,
+      weight,
+      height,
     } = req.body;
 
     // 2. CREATE PRESCRIPTION DOCUMENT
-    const prescriptionRef = db.collection('prescriptions').doc();
-    const today = new Date().toISOString().split('T')[0]; 
+    const prescriptionRef = db.collection("prescriptions").doc();
+    const today = new Date().toISOString().split("T")[0];
 
+    // 2. CREATE PRESCRIPTION DOCUMENT
     await prescriptionRef.set({
       doctorId,
-      // Fallback to "Unknown" only if strictly necessary, but prefer the real name
-      doctorName: doctorName || "Unknown Doctor", 
+      doctorName: doctorName || "Unknown Doctor",
       patientName,
+      officialName: officialName || patientName,
       phoneNumber,
       diagnosis,
-      medicines,
-      
-      // Save Tests (Default to empty array if none provided)
-      tests: tests || [], 
-      
+      // Mapping here ensures we only save exactly what we want
+      medicines: medicines.map((m) => ({
+        name: m.name,
+        dosage: m.dosage,
+        instruction: m.instruction,
+        customInstruction: m.customInstruction || "", // Save the new field
+        dosePerTime: m.dosePerTime || 1,
+        unit: m.unit || "Tablets",
+        duration: m.duration || "",
+      })),
+      age: age || null,
+      weight: weight || null,
+      height: height || null,
+      tests: tests || [],
       attachmentUrl: attachmentUrl || null,
       createdAt: new Date().toISOString(),
-      date: today
+      date: today,
     });
 
     // 3. DEDUCT INVENTORY (Only for Medicines)
     for (const item of medicines) {
-      if (!item.inventoryId) continue; 
+      if (!item.inventoryId) continue;
 
-      const medRef = inventoryDb.collection('medicines').doc(item.inventoryId);
+      const medRef = inventoryDb.collection("medicines").doc(item.inventoryId);
       const medSnap = await medRef.get();
 
       if (medSnap.exists) {
@@ -113,7 +135,7 @@ exports.createPrescription = async (req, res) => {
         let updateData = {};
 
         if (item.batchId && medData.batches) {
-          const updatedBatches = medData.batches.map(batch => {
+          const updatedBatches = medData.batches.map((batch) => {
             if (batch.batch_id === item.batchId) {
               const newQty = (batch.stock_quantity || 0) - (item.quantity || 1);
               return { ...batch, stock_quantity: newQty < 0 ? 0 : newQty };
@@ -122,18 +144,17 @@ exports.createPrescription = async (req, res) => {
           });
           updateData.batches = updatedBatches;
           if (medData.total_stock !== undefined) {
-             updateData.total_stock = medData.total_stock - (item.quantity || 1);
+            updateData.total_stock = medData.total_stock - (item.quantity || 1);
           }
         } else {
-           const currentStock = medData.stock || 0;
-           updateData.stock = currentStock - (item.quantity || 1);
+          const currentStock = medData.stock || 0;
+          updateData.stock = currentStock - (item.quantity || 1);
         }
         await medRef.update(updateData);
       }
     }
 
-    res.status(200).json({ message: 'Prescription Saved Successfully!' });
-
+    res.status(200).json({ message: "Prescription Saved Successfully!" });
   } catch (error) {
     console.error("Prescription Error:", error);
     res.status(500).json({ error: error.message });
@@ -147,14 +168,15 @@ exports.getMyPrescriptions = async (req, res) => {
     if (!phoneNumber) return res.json([]);
 
     // Fetch ALL prescriptions linked to this phone number
-    const snapshot = await db.collection('prescriptions')
-      .where('phoneNumber', '==', phoneNumber)
-      .orderBy('createdAt', 'desc')
+    const snapshot = await db
+      .collection("prescriptions")
+      .where("phoneNumber", "==", phoneNumber)
+      .orderBy("createdAt", "desc")
       .get();
 
-    const prescriptions = snapshot.docs.map(doc => ({
+    const prescriptions = snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
     }));
 
     res.json(prescriptions);
@@ -167,28 +189,63 @@ exports.getDoctorPrescriptions = async (req, res) => {
     const { doctorId } = req.params; // We get the Doctor's ID from the URL
 
     if (!doctorId) {
-        return res.status(400).json({ error: "Doctor ID is required" });
+      return res.status(400).json({ error: "Doctor ID is required" });
     }
 
     // QUERY: "Find all prescriptions where doctorId matches AND sort by newest"
-    const snapshot = await db.collection('prescriptions')
-      .where('doctorId', '==', doctorId)
-      .orderBy('createdAt', 'desc') // Newest first
+    const snapshot = await db
+      .collection("prescriptions")
+      .where("doctorId", "==", doctorId)
+      .orderBy("createdAt", "desc") // Newest first
       .get();
 
     // Convert database documents into a clean list
-    const history = snapshot.docs.map(doc => ({
+    const history = snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
     }));
 
     res.json(history);
-
   } catch (error) {
     console.error("Error fetching doctor history:", error);
-    res.status(500).json({ 
-        // Send the error message so we can see if it's an Index Error
-        error: error.message 
+    res.status(500).json({
+      // Send the error message so we can see if it's an Index Error
+      error: error.message,
     });
+  }
+};
+// --- UPDATE PRESCRIPTION PATIENT NAME (AND ADD TO FAMILY LIST) ---
+exports.updatePrescriptionPatient = async (req, res) => {
+  const { prescriptionId, newName, patientId } = req.body;
+
+  try {
+    if (!prescriptionId || !newName || !patientId) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const batch = db.batch();
+
+    // 1. Reference the Prescription Document
+    const prescriptionRef = db.collection("prescriptions").doc(prescriptionId);
+
+    // 2. Reference the Patient Profile (to store the family member name)
+    const patientRef = db.collection("patients").doc(patientId);
+
+    // 3. Operation A: Update the name on the prescription itself
+    batch.update(prescriptionRef, { patientName: newName });
+
+    // 4. Operation B: Add name to familyMembers array (arrayUnion prevents duplicates!)
+    // This is the "Smart Memory" part.
+    batch.update(patientRef, {
+      familyMembers: admin.firestore.FieldValue.arrayUnion(newName),
+    });
+
+    // 5. Commit both updates together
+    await batch.commit();
+
+    res.status(200).json({ message: "Name updated and saved to family list!" });
+  } catch (error) {
+    console.error("Update Patient Error:", error);
+    res.status(500).json({ error: "Failed to update name" });
   }
 };

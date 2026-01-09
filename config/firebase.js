@@ -14,9 +14,12 @@ if (process.env.DOCTOR_CREDENTIALS) {
   serviceAccountDoctor = require("../serviceAccountKey.json");
 }
 
-const doctorApp = admin.initializeApp({
-  credential: admin.credential.cert(serviceAccountDoctor)
-}, "doctorApp");
+const doctorApp = admin.initializeApp(
+  {
+    credential: admin.credential.cert(serviceAccountDoctor),
+  },
+  "doctorApp",
+);
 
 const db = doctorApp.firestore();
 
@@ -31,14 +34,19 @@ if (process.env.INVENTORY_CREDENTIALS) {
   // Read from Laptop (File)
   try {
     serviceAccountInventory = require("../inventoryKey.json");
-  } catch (e) { console.log("No local inventory key found"); }
+  } catch (e) {
+    console.log("No local inventory key found");
+  }
 }
 
 if (serviceAccountInventory) {
-    const inventoryApp = admin.initializeApp({
-        credential: admin.credential.cert(serviceAccountInventory)
-    }, "inventoryApp");
-    inventoryDb = inventoryApp.firestore();
+  const inventoryApp = admin.initializeApp(
+    {
+      credential: admin.credential.cert(serviceAccountInventory),
+    },
+    "inventoryApp",
+  );
+  inventoryDb = inventoryApp.firestore();
 }
 
 module.exports = { admin, db, inventoryDb };

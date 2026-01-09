@@ -1,16 +1,23 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const prescriptionController = require('../controllers/prescriptionController');
+const prescriptionController = require("../controllers/prescriptionController");
 
 // Search
-router.get('/search-medicines', prescriptionController.searchMedicines);
+router.get("/search-medicines", prescriptionController.searchMedicines);
 
 // Create (Now uses Name + Phone)
-router.post('/create-prescription', prescriptionController.createPrescription);
+router.post("/create-prescription", prescriptionController.createPrescription);
 
 // NEW: Get Prescriptions (For Patient)
-router.get('/my-prescriptions', prescriptionController.getMyPrescriptions);
+router.get("/my-prescriptions", prescriptionController.getMyPrescriptions);
 // We use :doctorId so the backend knows WHICH doctor is asking
-router.get('/doctor-history/:doctorId', prescriptionController.getDoctorPrescriptions);
+router.get(
+  "/doctor-history/:doctorId",
+  prescriptionController.getDoctorPrescriptions,
+);
+router.post(
+  "/update-patient-name",
+  prescriptionController.updatePrescriptionPatient,
+);
 
 module.exports = router;
