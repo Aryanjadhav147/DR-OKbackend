@@ -13,35 +13,36 @@ const allowedOrigins = [
   "https://dr-o-kfrontend.vercel.app",
 ];
 
-// Reusable CORS middleware configuration
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps)
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.indexOf(origin) === -1) {
-      const msg =
-        "The CORS policy for this site does not allow access from the specified Origin.";
+      const msg = "The CORS policy for this site does not allow access.";
       return callback(new Error(msg), false);
     }
     return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+  ],
+  optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
-// Apply CORS to all requests
+// 2. THE FIX: Place this at the VERY TOP
+// This single line handles both normal requests AND preflight (OPTIONS) requests automatically.
 app.use(cors(corsOptions));
 
-// FIX: Handle Preflight requests specifically for Vercel/Express Regex
-// Instead of '*', we use '/(.*)' to satisfy the path-to-regexp requirement
-app.options("/(.*)", cors(corsOptions));
-
-// --- 2. MIDDLEWARE ---
+// --- 3. MIDDLEWARE ---
 app.use(express.json());
 
-// --- 3. IMPORT ROUTES ---
+// --- 4. IMPORT ROUTES ---
 const authRoutes = require("./routes/authRoutes");
 const scheduleRoutes = require("./routes/scheduleRoutes");
 const doctorRoutes = require("./routes/doctorRoutes");
@@ -49,7 +50,7 @@ const prescriptionRoutes = require("./routes/prescriptionRoutes");
 const labRoutes = require("./routes/labRoutes");
 const patientRoutes = require("./routes/patientRoutes");
 
-// --- 4. USE ROUTES ---
+// --- 5. USE ROUTES ---
 app.use("/api", authRoutes);
 app.use("/api", scheduleRoutes);
 app.use("/api", doctorRoutes);
@@ -57,10 +58,9 @@ app.use("/api", prescriptionRoutes);
 app.use("/api/labs", labRoutes);
 app.use("/api/patients", patientRoutes);
 
-// --- 5. VERCEL / PORT CONFIG ---
+// --- 6. VERCEL / PORT CONFIG ---
 const PORT = process.env.PORT || 5000;
 
-// This allows the app to run locally but also work as a Vercel serverless function
 if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 }
