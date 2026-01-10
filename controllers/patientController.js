@@ -18,4 +18,18 @@ exports.updatePatientProfile = async (req, res) => {
     console.error("Update Profile Error:", error);
     res.status(500).json({ error: error.message });
   }
+  exports.getProfile = async (req, res) => {
+    try {
+      const { uid } = req.params;
+      const userSnap = await db.collection("patients").doc(uid).get();
+
+      if (!userSnap.exists) {
+        return res.status(404).json({ error: "Patient not found" });
+      }
+
+      res.json(userSnap.data());
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  };
 };

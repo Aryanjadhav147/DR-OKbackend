@@ -40,7 +40,7 @@ exports.getAllDoctors = async (req, res) => {
         (doc) =>
           doc.specialization &&
           doc.specialization.toLowerCase().trim() ===
-            specialization.toLowerCase().trim(),
+            specialization.toLowerCase().trim()
       );
     }
 
@@ -51,7 +51,7 @@ exports.getAllDoctors = async (req, res) => {
         (doc) =>
           (doc.address && doc.address.toLowerCase().includes(searchCity)) ||
           (doc.hospitalName &&
-            doc.hospitalName.toLowerCase().includes(searchCity)),
+            doc.hospitalName.toLowerCase().includes(searchCity))
       );
     }
 
@@ -70,7 +70,7 @@ exports.getAllDoctors = async (req, res) => {
           userLat,
           userLng,
           doc.location.lat,
-          doc.location.lng,
+          doc.location.lng
         );
         return { ...doc, distance: dist };
       });
@@ -86,7 +86,7 @@ exports.getAllDoctors = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-// --- 2. GET DOCTOR HISTORY (Unchanged) ---
+// --- 2. GET DOCTOR HISTORY
 exports.getDoctorHistory = async (req, res) => {
   try {
     const { uid } = req.params;
@@ -125,5 +125,24 @@ exports.updateDoctorProfile = async (req, res) => {
   } catch (error) {
     console.error("Update Profile Error:", error);
     res.status(500).json({ error: error.message });
+  }
+};
+exports.getDoctorProfile = async (req, res) => {
+  try {
+    const { uid } = req.params;
+
+    // Fetch the specific doctor document
+    const doctorRef = db.collection("doctors").doc(uid);
+    const doc = await doctorRef.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+
+    // Return the data to the frontend
+    res.status(200).json(doc.data());
+  } catch (error) {
+    console.error("Error fetching doctor profile:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };

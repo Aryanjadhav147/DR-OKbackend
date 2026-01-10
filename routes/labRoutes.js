@@ -36,5 +36,7 @@ router.post("/update-services", labController.updateLabServices);
 router.post("/update-settings", labController.updateLabSettings);
 // 8. Update Profile (Photo & Details)
 router.put("/update-profile", labController.updateLabProfile);
+//9.To get a single Lab profile in his Labdashboard
+router.get("/profile/:uid", labController.getLabProfile);
 
 module.exports = router;

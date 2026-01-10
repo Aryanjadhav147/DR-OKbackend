@@ -191,3 +191,17 @@ exports.updateLabProfile = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+exports.getLabProfile = async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const labDoc = await db.collection("labs").doc(uid).get();
+
+    if (!labDoc.exists) {
+      return res.status(404).json({ error: "Lab not found" });
+    }
+
+    res.json(labDoc.data());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
