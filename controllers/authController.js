@@ -41,7 +41,7 @@ exports.registerDoctor = async (req, res) => {
       licenseNumber: license,
       hospitalName: hospital,
       role: "doctor",
-      isVerified: false, // Default false until Agent approves
+      isVerified: false,
       createdAt: new Date(),
     });
     res.status(200).json({ message: "Doctor Profile Created" });
@@ -55,7 +55,6 @@ exports.registerLab = async (req, res) => {
   try {
     const { uid, email, name, phone, address, location } = req.body;
 
-    // Define the default schedule (Standard Business Hours)
     const defaultSchedule = {
       monday: { isOpen: true, open: "09:00", close: "21:00" },
       tuesday: { isOpen: true, open: "09:00", close: "21:00" },
@@ -63,7 +62,7 @@ exports.registerLab = async (req, res) => {
       thursday: { isOpen: true, open: "09:00", close: "21:00" },
       friday: { isOpen: true, open: "09:00", close: "21:00" },
       saturday: { isOpen: true, open: "09:00", close: "21:00" },
-      sunday: { isOpen: false, open: "10:00", close: "14:00" }, // Closed by default
+      sunday: { isOpen: false, open: "10:00", close: "14:00" },
     };
 
     await db.collection("labs").doc(uid).set({
@@ -75,14 +74,8 @@ exports.registerLab = async (req, res) => {
       location,
       role: "lab",
       isVerified: false,
-
-      // --- THE CHANGE ---
-      // 1. Keep 'timings' string for simple UI display (e.g. Search Cards)
       timings: "09:00 AM - 09:00 PM",
-
-      // 2. Add 'schedule' object for the advanced logic
       schedule: defaultSchedule,
-
       services: [],
       createdAt: new Date(),
     });
@@ -94,65 +87,61 @@ exports.registerLab = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-// --- 4. GET USER ROLE (Fixed) ---
+
+// --- 4. GET USER ROLE ---
 exports.getRole = async (req, res) => {
   try {
-    const uid = req.params.uid;
-    // console.log("🔍 Checking Role for UID:", uid);
+    const { uid } = req.params;
 
-    // A. Check Doctors
+    // Check Doctors
     const doctorDoc = await db.collection("doctors").doc(uid).get();
     if (doctorDoc.exists) {
       const data = doctorDoc.data();
-      if (data.isVerified === false)
-        return res.json({ role: "pending", name: data.name });
-      return res.json({ role: "doctor", name: data.name });
+      return res.json({
+        role: data.isVerified ? "doctor" : "pending",
+        name: data.name,
+      });
     }
 
-    // B. Check Labs
+    // Check Labs
     const labDoc = await db.collection("labs").doc(uid).get();
     if (labDoc.exists) {
       const data = labDoc.data();
-      if (data.isVerified === false)
-        return res.json({ role: "pending", name: data.name });
-      return res.json({ role: "lab", name: data.name });
+      return res.json({
+        role: data.isVerified ? "lab" : "pending",
+        name: data.name,
+      });
     }
 
-    // C. Check Patients
+    // Check Patients
     const patientDoc = await db.collection("patients").doc(uid).get();
     if (patientDoc.exists) {
       return res.json({ role: "patient", name: patientDoc.data().name });
     }
 
-    // If no match found
-    console.log("❌ User not found in any collection");
     return res.status(404).json({ error: "User not found" });
   } catch (error) {
-    console.error("Server Error:", error);
     res.status(500).json({ error: error.message });
   }
 };
 
-// --- 5. VERIFY DOCTOR (Agent Only) ---
+// --- 5. VERIFY DOCTOR ---
 exports.verifyDoctor = async (req, res) => {
   try {
     const { doctorId } = req.body;
-    await db.collection("doctors").doc(doctorId).update({
-      isVerified: true,
-    });
+    await db.collection("doctors").doc(doctorId).update({ isVerified: true });
     res.status(200).json({ message: "Doctor Verified Successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-// --- 6. VERIFY LAB (Agent Only) ---
+// --- 6. VERIFY LAB ---
 exports.verifyLab = async (req, res) => {
   try {
     const { labId } = req.body;
-    await db.collection("labs").doc(labId).update({
-      isVerified: false,
-    });
+    // FIX: Changed from false to true
+    await db.collection("labs").doc(labId).update({ isVerified: true });
     res.status(200).json({ message: "Lab Verified Successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
