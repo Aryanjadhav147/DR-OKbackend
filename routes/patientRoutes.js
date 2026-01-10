@@ -2,7 +2,8 @@ const express = require("express");
 const router = express.Router();
 const patientController = require("../controllers/patientController");
 
-// This line will now find the function because it's no longer hidden inside updatePatientProfile
+// Line 4 (The one causing the crash in the logs)
+// It will work now because getProfile is properly exported above
 router.get("/profile/:uid", patientController.getProfile);
 router.put("/update-profile", patientController.updatePatientProfile);
 

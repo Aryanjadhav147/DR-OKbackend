@@ -18,7 +18,7 @@ exports.updatePatientProfile = async (req, res) => {
     console.error("Update Profile Error:", error);
     res.status(500).json({ error: error.message });
   }
-}; // <--- THIS BRACKET WAS MISSING OR MISPLACED
+}; // <--- THIS BRACKET WAS MISPLACED IN YOUR PREVIOUS VERSION
 
 // --- GET PROFILE ---
 exports.getProfile = async (req, res) => {
